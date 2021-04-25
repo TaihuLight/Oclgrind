@@ -1,0 +1,66 @@
+name: CTS
+on: [workflow_dispatch, push]
+
+jobs:
+  build-cts:
+    name: Build OpenCL CTS
+    runs-on: ubuntu-20.04
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install dependencies
+        run: bash .github/workflows/install-deps.sh
+      - name: cache-cts
+        uses: actions/cache@v2
+        with:
+          # TODO: git hash in key
+          path: opencl-cts
+          key: opencl-cts-temp-2
+      - uses: actions/checkout@v2
+        if: steps.cache-cts.outputs.cache-hit != 'true'
+        with:
+          repository: KhronosGroup/OpenCL-CTS
+          path: opencl-cts
+      - uses: actions/checkout@v2
+        if: steps.cache-cts.outputs.cache-hit != 'true'
+        with:
+          repository: KhronosGroup/OpenCL-Headers
+          path: opencl-cts/opencl-headers
+      - uses: actions/checkout@v2
+        if: steps.cache-cts.outputs.cache-hit != 'true'
+        with:
+          repository: KhronosGroup/OpenCL-ICD-Loader
+          path: opencl-cts/opencl-icd-loader
+      - name: Create ICD loader build dir
+        run: cmake -E make_directory opencl-cts/opencl-icd-loader/build
+      - name: CMake ICD Loader
+        if: steps.cache-cts.outputs.cache-hit != 'true'
+        run: >
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=$PWD/../../install \
+            -DOPENCL_ICD_LOADER_HEADERS_DIR=$PWD/../../opencl-headers
+        working-directory: opencl-cts/opencl-icd-loader/build
+      - name: Build ICD Loader
+        if: steps.cache-cts.outputs.cache-hit != 'true'
+        run: >
+          cmake --build . && cmake --install .
+        working-directory: opencl-cts/opencl-icd-loader/build
+      - name: Create CTS build dir
+        run: cmake -E make_directory opencl-cts/build
+      - name: CMake CTS
+        if: steps.cache-cts.outputs.cache-hit != 'true'
+        run: >
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=$PWD/../install \
+            -DCL_INCLUDE_DIR=$PWD/../opencl-headers \
+            -DCL_LIB_DIR=$PWD/../install/lib \
+            -DCL_LIBCLCXX_DIR=. \
+            -DCLConform_LIBRARIES=OpenCL
+        working-directory: opencl-cts/build
+      - name: Build CTS
+        if: steps.cache-cts.outputs.cache-hit != 'true'
+        run: >
+          cmake --build . && cmake --install .
+        working-directory: opencl-cts/build
